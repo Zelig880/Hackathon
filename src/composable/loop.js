@@ -1,25 +1,22 @@
 import { ref, reactive } from "vue";
 export function useGame() {
-  const gestures = ["open", "closed", "thumbsup", "thumbsdown"];
+  const gestures = ["Open_Palm", "Closed_Fist"];
   const currentGesture = ref(null);
   const lastRender = ref(0);
   const updateSpeed = ref(3000);
   const playing = ref(false);
   const visibility = reactive([false, false, false, false]); 
 
-  const randomImages = reactive(['https://americadomani.com/wp-content/uploads/2022/07/hand_gesture.jpg',
-  'https://americadomani.com/wp-content/uploads/2022/07/hand_gesture.jpg',
-  'https://americadomani.com/wp-content/uploads/2022/07/hand_gesture.jpg',
-  'https://americadomani.com/wp-content/uploads/2022/07/hand_gesture.jpg']);
-  
+  const randomImages = reactive(['/public/fist.svg',
+  '/public/palm.svg',]);
 
   const score = ref(0);
   const currentLevel = ref(0);
-  const levels = reactive([ 10, 25, 50, 100, 200 ]);
+  const levels = reactive([ 3, 6, 12, 18, 30 ]);
   const gameStatus = ref('start');
   const levelUp = ref(false);
   const timer = ref(null);
-  const LEVEL_DURATION = 60000;
+  const LEVEL_DURATION = 20000;
 
 
   const endGame = () => {
@@ -27,7 +24,18 @@ export function useGame() {
     clearTimeout(timer.value);
   };
 
-  const addScore = () => {
+  const checkDetectionAndAddScore = (gesture, position) => {
+    const handPosition = checkLandmarkPosition(position.x, position.y);
+    if( currentGesture.value !== gesture) {
+      console.log('Wrong gesture', gesture, currentGesture.value);
+      return;
+    }
+
+    if(visibility[handPosition] === false) {
+      console.log('Wrong Hand', visibility, handPosition);
+      return;
+    }
+
     score.value++;
     if (score.value === levels[currentLevel.value]) {
         levelUp.value = true;
@@ -40,15 +48,18 @@ export function useGame() {
     return gestures[idx];
   };
 
-  function checkLandmarkPosition(landmark, screenWidth, screenHeight) {
-    var x = landmark[0];
-    var y = landmark[1];
+  const currentImage = () => {
+    const imageIndex = gestures.indexOf(currentGesture.value);
+    return randomImages[imageIndex];
+  }
 
-    if (x < screenWidth / 2 && y < screenHeight / 2) {
+  function checkLandmarkPosition(x, y) {
+
+    if (x < 0.5 && y < 0.5) {
         return 0;
-    } else if (x >= screenWidth / 2 && y < screenHeight / 2) {
+    } else if (x >= 0.5 && y < 0.5) {
         return 1;
-    } else if (x < screenWidth / 2 && y >= screenHeight / 2) {
+    } else if (x < 0.5 && y >= 0.5) {
         return 2;
     } else {
         return 3;
@@ -67,8 +78,11 @@ export function useGame() {
     return x*1 + y*2;
   };
   
-  function toggleVisibility(index) {
-    visibility[index] = !visibility[index];
+  function toggleVisibility(indexToToggle) {
+    const newVisibility = visibility.map((entry, index ) => {
+      return indexToToggle === index
+    });
+    Object.assign(visibility, newVisibility)
   }
 
   const loop = (time) => {
@@ -104,8 +118,10 @@ export function useGame() {
     start,
     stop,
     randomPosition,
-    randomImages,
+    currentImage,
     visibility,
-    playing
+    playing,
+    score,
+    checkDetectionAndAddScore,
   }
 }

@@ -7,23 +7,9 @@ import LevelUp from './components/LevelUp.vue';
 import GameOver from './components/GameOver.vue';
 import {useGame} from './composable/loop.js'
 
-let detector;
 const gameStarted = ref(false);
 const videoCam = ref();
-
-// const randomImages = ref([]);
-// const visibility = ref([false, false, false, false]);
 const game = useGame();
-
-const createDetectionInstance = async () => {
-  const model = handPoseDetection.SupportedModels.MediaPipeHands;
-  const detectorConfig = {
-    runtime: "mediapipe",
-    modelType: "lite",
-    solutionPath: "https://cdn.jsdelivr.net/npm/@mediapipe/hands/",
-  };
-  detector = await handPoseDetection.createDetector(model, detectorConfig);
-};
 
 function openCam() {
   let all_mediaDevices = navigator.mediaDevices;
@@ -52,38 +38,34 @@ function openCam() {
 }
 
 const handleSignDetection = async () => {
-  // if (!videoCam.value || !detector) return;
-  // setInterval(async () => {
-  //   const hands = await detector.estimateHands(videoCam.value);
-  //   if (hands.length > 0) {
-  //     console.log(hands)
-  //   }
-  // }, 2000);
   
   console.log('handleSignDetection:', videoCam.value);
 
   const gestureRecognizer = await createGestureRecognizer();
 
   setInterval(async () => {
-    const results = await getGesturesFromVideo(gestureRecognizer, videoCam.value);
+    try {   
+      const results = await getGesturesFromVideo(gestureRecognizer, videoCam.value);
+      if (results.gestures.length > 0) {
+        console.log('GESTURE CATEGORY:', results.gestures.map(gesture => gesture[0].categoryName));
+        // console.log('LANDMARKS:', results.landmarks);
 
-    if (results.gestures.length > 0) {
-      console.log('GESTURE CATEGORY:', results.gestures.map(gesture => gesture[0].categoryName));
-      // console.log('LANDMARKS:', results.landmarks);
+        const aggregate = results.landmarks[0].reduce((previous, current) => ({
+          x: previous.x + current.x,
+          y: previous.y + current.y,
+          z: previous.z + current.z,
+        }), { x: 0, y: 0, z: 0 });
 
-      const aggregate = results.landmarks[0].reduce((previous, current) => ({
-        x: previous.x + current.x,
-        y: previous.y + current.y,
-        z: previous.z + current.z,
-      }), { x: 0, y: 0, z: 0 });
-
-      // console.log('AGG:', aggregate);
-
-      console.log('LOCATION:', {
-        x: aggregate.x / results.landmarks[0].length,
-        y: aggregate.y / results.landmarks[0].length,
-        z: aggregate.z / results.landmarks[0].length,
-      });
+        // console.log('AGG:', aggregate);
+        const gesture = results.gestures.map(gesture => gesture[0].categoryName)[0] || 'none';
+        const aggregatedLocation = {
+          x: aggregate.x / results.landmarks[0].length,
+          y: aggregate.y / results.landmarks[0].length,
+          z: aggregate.z / results.landmarks[0].length,
+        };
+        game.checkDetectionAndAddScore(gesture, aggregatedLocation);
+      }
+    } catch (error) {
     }
   }, 1000);
 };
@@ -126,19 +108,10 @@ const handleSignDetection = async () => {
 const startGame = async () => {
   gameStarted.value = true;
   openCam();
-  await handleSignDetection();
   game.start();
-  setInterval(() => {
-    console.log('visibility:', game.visibility);
-  }, 1000);
-
-  // // await createDetectionInstance();
-  // randomImages.value = shuffleArray(images);
-  // randomImages.value.forEach((_, index) => toggleVisibility(index)); // Start toggling visibility for each image
+  await handleSignDetection();
 };
 
-// console.log('randomImages:', randomImages.value);
-// console.log('visibility:', visibility.value);
 
 </script>
 
@@ -147,16 +120,13 @@ const startGame = async () => {
   <!-- <LevelUp v-if="!gameStarted" @start="startGame" />
   <GameOver v-if="!gameStarted" @start="startGame" /> -->
   <div v-show="gameStarted" class="wrapper">
-    <!-- <div class="video-overlay">
-      Overlay placeholder
-    </div> -->
     <div class="wrapper">
       <div class="overlay">
-        <transition name="fade" mode="out-in" v-for="(img, index) in game.randomImages" :key="index">
-          <div class="overlay-quadrant" v-if="game.visibility[index]">
-            <img :src="img" alt="Overlay Image" />
-          </div>
-        </transition>
+        <div class="overlay-quadrant" v-for="(img, index) in 4" :key="index">
+          <transition name="fade" mode="out-in">
+            <img v-if="game.visibility[index]" :src="game.currentImage()" alt="Overlay Image" />
+          </transition>
+        </div>
       </div>
       <video
         ref="videoCam"
@@ -166,6 +136,7 @@ const startGame = async () => {
         muted
         playsInline
       />
+      <div>Your Score is: {{  game.score }}</div>
       </div>
   </div>
 </template>
@@ -198,13 +169,13 @@ const startGame = async () => {
 }
 
 .overlay-quadrant img {
-  max-width: 90%;
-  max-height: 90%;
+  max-width: 70%;
+  max-height: 70%;
   object-fit: cover;
 }
 
 .fade-enter-active, .fade-leave-active {
-  transition: opacity 1s;
+  transition: opacity 0.1s;
 }
 
 .fade-enter, .fade-leave-to /* .fade-leave-active in <2.1.8 */ {
